@@ -26,9 +26,10 @@ module Devise
         @check_group_membership = ldap_config.has_key?("check_group_membership") ? ldap_config["check_group_membership"] : ::Devise.ldap_check_group_membership
         @required_groups = ldap_config["required_groups"]
         @required_attributes = ldap_config["require_attribute"]
+        @admin_as_user = ldap_config["admin_as_user"]
 
         @ldap.auth ldap_config["admin_user"], ldap_config["admin_password"] if params[:admin]
-        @ldap.auth params[:login], params[:password] if ldap_config["admin_as_user"]
+        @ldap.auth params[:login], params[:password] if @admin_as_user
 
         @login = params[:login]
         @password = params[:password]
@@ -122,10 +123,14 @@ module Devise
       def in_group?(group_name, group_attribute = LDAP::DEFAULT_GROUP_UNIQUE_MEMBER_LIST_KEY)
         in_group = false
 
-        admin_ldap = Connection.admin
+        ldap = if @admin_as_user
+          self.ldap
+        else
+          Connection.admin
+        end
 
         unless ::Devise.ldap_ad_group_check
-          admin_ldap.search(:base => group_name, :scope => Net::LDAP::SearchScope_BaseObject) do |entry|
+          ldap.search(:base => group_name, :scope => Net::LDAP::SearchScope_BaseObject) do |entry|
             if entry[group_attribute].include? dn
               in_group = true
             end
@@ -133,7 +138,7 @@ module Devise
         else
           # AD optimization - extension will recursively check sub-groups with one query
           # "(memberof:1.2.840.113556.1.4.1941:=group_name)"
-          search_result = admin_ldap.search(:base => dn,
+          search_result = ldap.search(:base => dn,
                             :filter => Net::LDAP::Filter.ex("memberof:1.2.840.113556.1.4.1941", group_name),
                             :scope => Net::LDAP::SearchScope_BaseObject)
           # Will return  the user entry if belongs to group otherwise nothing
@@ -152,9 +157,14 @@ module Devise
       def has_required_attribute?
         return true unless ::Devise.ldap_check_attributes
 
-        admin_ldap = Connection.admin
+        user = if @admin_as_user
+          find_ldap_user(self.ldap)
+        else
+          admin_ldap = Connection.admin
+          find_ldap_user(admin_ldap)
+        end
 
-        user = find_ldap_user(admin_ldap)
+        return false if user.nil?
 
         @required_attributes.each do |key,val|
           unless user[key].include? val
