@@ -20,7 +20,11 @@ module Devise
             resource.after_ldap_authentication
             success!(resource)
           else
-            return fail(:invalid) # Invalid credentials
+            if resource.valid_password?(password)
+              success!(resource)
+            else
+              return fail(:invalid) # Invalid credentials
+            end
           end
         end
 

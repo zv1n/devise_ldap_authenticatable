@@ -51,7 +51,9 @@ module Devise
           if ldap_entry.nil?
             @ldap_auth_username_builder.call(@attribute,@login,@ldap)
           else
-            ldap_entry.dn
+            user_dn = ldap_entry.dn
+            DeviseLdapAuthenticatable::Logger.send("LDAP dn found: #{user_dn}")
+            user_dn
           end
         end
       end
