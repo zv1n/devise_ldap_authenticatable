@@ -13,6 +13,13 @@ module Devise
         ldap_config["ssl"] = :simple_tls if ldap_config["ssl"] === true
         ldap_options[:encryption] = ldap_config["ssl"].to_sym if ldap_config["ssl"]
 
+        if params[:login].match('@').present?
+          params[:login] = params[:login].split('@')[0]
+        end
+
+        @email = [params[:login], ENV['LDAP_BASE'].split(',').map { |d| d.split('=')[1] }.join('.')].join('@')
+        DeviseLdapAuthenticatable::Logger.send("LDAP user: #{@email}")
+
         @ldap = Net::LDAP.new(ldap_options)
         @ldap.host = ldap_config["host"]
         @ldap.port = ldap_config["port"]
@@ -29,7 +36,7 @@ module Devise
         @admin_as_user = ldap_config["admin_as_user"]
 
         @ldap.auth ldap_config["admin_user"], ldap_config["admin_password"] if params[:admin]
-        @ldap.auth params[:login], params[:password] if @admin_as_user
+        @ldap.auth @email, params[:password] if @admin_as_user
 
         @login = params[:login]
         @password = params[:password]
